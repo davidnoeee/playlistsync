@@ -95,8 +95,8 @@ export async function fetchAppleMusicPlaylist(
   storefront: string,
   playlistId: string
 ): Promise<AppleMusicPlaylist> {
-  // Validate storefront (2-letter country code) and playlistId (pl.xxx format)
-  if (!/^[a-z]{2}$/.test(storefront)) {
+  // Validate storefront (2-letter country code, case-insensitive) and playlistId (pl.xxx format)
+  if (!/^[a-zA-Z]{2}$/.test(storefront)) {
     throw new Error("Invalid storefront");
   }
   if (!/^pl\.[a-zA-Z0-9]+$/.test(playlistId)) {

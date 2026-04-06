@@ -138,7 +138,9 @@ export async function getUserPlaylists(
 
 /**
  * Sanitize a search term for Spotify's query syntax.
- * Removes special query operators to prevent query injection.
+ * Removes colons, quotes, and backslashes to prevent query injection.
+ * Note: This means legitimate colons in names are stripped, but the
+ * track:/artist: field operators in the query use their own colons.
  */
 function sanitizeSearchTerm(term: string): string {
   // Remove Spotify query field operators and special chars
