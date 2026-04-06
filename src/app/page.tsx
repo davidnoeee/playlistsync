@@ -71,7 +71,7 @@ function getInitialAuthState(): {
 }
 
 export default function Home() {
-  const initRef = useRef(false);
+  const hasInitialized = useRef(false);
   const [initial] = useState(getInitialAuthState);
   const [step, setStep] = useState<AppStep>(initial.step);
   const [url, setUrl] = useState("");
@@ -90,8 +90,8 @@ export default function Home() {
 
   // Clean up URL params after OAuth redirect (one-time side effect)
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
 
     const params = new URLSearchParams(window.location.search);
     if (params.has("spotify_auth") || params.has("error")) {

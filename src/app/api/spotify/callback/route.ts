@@ -22,8 +22,7 @@ export async function GET(request: NextRequest) {
     const tokens = await exchangeCodeForTokens(code);
     const user = await getSpotifyUser(tokens.access_token);
 
-    // Redirect back to the app with the token data in a fragment
-    // Using fragment (#) so it's not sent to the server in subsequent requests
+    // Redirect back to the app with the token data as a query parameter
     const params = new URLSearchParams({
       access_token: tokens.access_token,
       user_id: user.id,

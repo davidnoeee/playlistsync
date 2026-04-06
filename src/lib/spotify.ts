@@ -127,9 +127,22 @@ export async function getUserPlaylists(
     const data = await res.json();
     playlists.push(...data.items);
     url = data.next;
+    // Validate pagination URL is from Spotify API
+    if (url && !url.startsWith(SPOTIFY_API_BASE)) {
+      break;
+    }
   }
 
   return playlists;
+}
+
+/**
+ * Sanitize a search term for Spotify's query syntax.
+ * Removes special query operators to prevent query injection.
+ */
+function sanitizeSearchTerm(term: string): string {
+  // Remove Spotify query field operators and special chars
+  return term.replace(/[:"\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -140,8 +153,11 @@ export async function searchTrack(
   trackName: string,
   artistName: string
 ): Promise<SpotifyTrack | null> {
+  const safeName = sanitizeSearchTerm(trackName);
+  const safeArtist = sanitizeSearchTerm(artistName);
+
   // Try exact search first
-  const query = `track:${trackName} artist:${artistName}`;
+  const query = `track:${safeName} artist:${safeArtist}`;
   const params = new URLSearchParams({
     q: query,
     type: "track",
@@ -162,7 +178,7 @@ export async function searchTrack(
 
   // Fallback: broader search
   const fallbackParams = new URLSearchParams({
-    q: `${trackName} ${artistName}`,
+    q: `${safeName} ${safeArtist}`,
     type: "track",
     limit: "5",
   });
@@ -182,6 +198,16 @@ export async function searchTrack(
 }
 
 /**
+ * Validate that a Spotify ID contains only allowed characters.
+ */
+function validateSpotifyId(id: string): string {
+  if (!/^[a-zA-Z0-9]+$/.test(id)) {
+    throw new Error("Invalid Spotify ID");
+  }
+  return id;
+}
+
+/**
  * Create a new Spotify playlist.
  */
 export async function createPlaylist(
@@ -190,7 +216,8 @@ export async function createPlaylist(
   name: string,
   description: string
 ): Promise<SpotifyPlaylist> {
-  const res = await fetch(`${SPOTIFY_API_BASE}/users/${userId}/playlists`, {
+  const safeUserId = validateSpotifyId(userId);
+  const res = await fetch(`${SPOTIFY_API_BASE}/users/${safeUserId}/playlists`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -218,8 +245,9 @@ export async function getPlaylistTracks(
   accessToken: string,
   playlistId: string
 ): Promise<SpotifyTrack[]> {
+  const safeId = validateSpotifyId(playlistId);
   const tracks: SpotifyTrack[] = [];
-  let url: string | null = `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks?limit=100`;
+  let url: string | null = `${SPOTIFY_API_BASE}/playlists/${safeId}/tracks?limit=100`;
 
   while (url) {
     const res: Response = await fetch(url, {
@@ -231,6 +259,10 @@ export async function getPlaylistTracks(
       if (item.track) tracks.push(item.track);
     }
     url = data.next;
+    // Validate pagination URL is from Spotify API
+    if (url && !url.startsWith(SPOTIFY_API_BASE)) {
+      break;
+    }
   }
 
   return tracks;
@@ -244,11 +276,12 @@ export async function addTracksToPlaylist(
   playlistId: string,
   trackUris: string[]
 ): Promise<void> {
+  const safeId = validateSpotifyId(playlistId);
   // Spotify allows max 100 tracks per request
   for (let i = 0; i < trackUris.length; i += 100) {
     const batch = trackUris.slice(i, i + 100);
     const res = await fetch(
-      `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks`,
+      `${SPOTIFY_API_BASE}/playlists/${safeId}/tracks`,
       {
         method: "POST",
         headers: {
@@ -273,10 +306,11 @@ export async function removeTracksFromPlaylist(
   playlistId: string,
   trackUris: string[]
 ): Promise<void> {
+  const safeId = validateSpotifyId(playlistId);
   for (let i = 0; i < trackUris.length; i += 100) {
     const batch = trackUris.slice(i, i + 100);
     const res = await fetch(
-      `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks`,
+      `${SPOTIFY_API_BASE}/playlists/${safeId}/tracks`,
       {
         method: "DELETE",
         headers: {

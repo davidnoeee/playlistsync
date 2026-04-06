@@ -10,6 +10,9 @@ export interface AppleMusicPlaylist {
   tracks: AppleMusicTrack[];
 }
 
+const APPLE_MUSIC_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 /**
  * Extract the playlist ID and storefront from an Apple Music playlist URL.
  * Supports formats like:
@@ -22,7 +25,12 @@ export function parseAppleMusicUrl(url: string): {
 } | null {
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.endsWith("music.apple.com")) return null;
+    if (
+      parsed.hostname !== "music.apple.com" &&
+      !parsed.hostname.endsWith(".music.apple.com")
+    ) {
+      return null;
+    }
 
     const segments = parsed.pathname.split("/").filter(Boolean);
     // segments: [storefront, "playlist", name?, id] or [storefront, "playlist", id]
@@ -49,10 +57,7 @@ export function parseAppleMusicUrl(url: string): {
  */
 async function fetchAppleMusicToken(): Promise<string> {
   const res = await fetch("https://music.apple.com/us/browse", {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    },
+    headers: { "User-Agent": APPLE_MUSIC_USER_AGENT },
   });
   const html = await res.text();
 
@@ -73,10 +78,7 @@ async function fetchAppleMusicToken(): Promise<string> {
   const jsMatch = html.match(/src="(\/assets\/index[^"]+\.js)"/);
   if (jsMatch) {
     const jsRes = await fetch(`https://music.apple.com${jsMatch[1]}`, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-      },
+      headers: { "User-Agent": APPLE_MUSIC_USER_AGENT },
     });
     const jsText = await jsRes.text();
     const tokenMatch = jsText.match(/eyJh[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
@@ -93,15 +95,22 @@ export async function fetchAppleMusicPlaylist(
   storefront: string,
   playlistId: string
 ): Promise<AppleMusicPlaylist> {
+  // Validate storefront (2-letter country code) and playlistId (pl.xxx format)
+  if (!/^[a-z]{2}$/.test(storefront)) {
+    throw new Error("Invalid storefront");
+  }
+  if (!/^pl\.[a-zA-Z0-9]+$/.test(playlistId)) {
+    throw new Error("Invalid playlist ID");
+  }
+
   const token = await fetchAppleMusicToken();
 
-  const apiUrl = `https://amp-api.music.apple.com/v1/catalog/${storefront}/playlists/${playlistId}?include=tracks&fields[tracks]=name,artistName,albumName`;
+  const apiUrl = `https://amp-api.music.apple.com/v1/catalog/${encodeURIComponent(storefront)}/playlists/${encodeURIComponent(playlistId)}?include=tracks&fields[tracks]=name,artistName,albumName`;
 
   const res = await fetch(apiUrl, {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      "User-Agent": APPLE_MUSIC_USER_AGENT,
       Origin: "https://music.apple.com",
     },
   });
@@ -139,8 +148,7 @@ export async function fetchAppleMusicPlaylist(
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          "User-Agent": APPLE_MUSIC_USER_AGENT,
           Origin: "https://music.apple.com",
         },
       }
@@ -171,12 +179,20 @@ export async function fetchAppleMusicPlaylist(
 export async function fetchAppleMusicPlaylistFromHtml(
   url: string
 ): Promise<AppleMusicPlaylist> {
+  // Validate that the URL is a legitimate Apple Music URL
+  const parsedUrl = new URL(url);
+  if (
+    parsedUrl.hostname !== "music.apple.com" &&
+    !parsedUrl.hostname.endsWith(".music.apple.com")
+  ) {
+    throw new Error("Invalid Apple Music URL");
+  }
+
   const { load } = await import("cheerio");
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "User-Agent": APPLE_MUSIC_USER_AGENT,
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9",
